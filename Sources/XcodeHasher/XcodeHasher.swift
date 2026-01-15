@@ -18,7 +18,10 @@
 // under the License.
 
 import Foundation
-import CryptoSwift
+#if canImport(CryptoKit)
+import CryptoKit
+#endif
+import CommonCrypto
 
 // Thanks to https://pewpewthespells.com/blog/xcode_deriveddata_hashes.html for
 // the initial Objective-C implementation.
@@ -33,7 +36,7 @@ public class XcodeHasher {
         var result = Array(repeating: "", count: 28)
 
         // Compute md5 hash of the path
-        let digest = path.bytes.md5()
+        let digest = md5Hash(for: path)
 
         // Split 16 bytes into two chunks of 8 bytes each.
         let partitions = stride(from: 0, to: digest.count, by: 8).map {
@@ -68,5 +71,23 @@ public class XcodeHasher {
         }
 
         return result.joined()
+    }
+    
+    private static func md5Hash(for string: String) -> [UInt8] {
+        let data = Data(string.utf8)
+        
+        #if canImport(CryptoKit) && swift(>=5.0)
+        if #available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *) {
+            let digest = Insecure.MD5.hash(data: data)
+            return Array(digest)
+        }
+        #endif
+        
+        // Fallback to CommonCrypto
+        var digest = [UInt8](repeating: 0, count: Int(CC_MD5_DIGEST_LENGTH))
+        data.withUnsafeBytes { bufferPointer in
+            _ = CC_MD5(bufferPointer.baseAddress, CC_LONG(data.count), &digest)
+        }
+        return digest
     }
 }
